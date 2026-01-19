@@ -1,0 +1,33 @@
+{
+  "name": "cloud-storage-service",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "frontend",
+    "backend",
+    "frontend-vite",
+    "backend-supabase",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:frontend": "npm run dev --workspace frontend",
+    "dev:backend": "npm run dev --workspace backend",
+    "start:frontend": "npm run start --workspace frontend",
+    "start:backend": "npm run start --workspace backend",
+    "dev:vite": "npm run dev --workspace frontend-vite",
+    "dev:supabase": "npm run dev --workspace backend-supabase",
+    "start:vite": "npm run dev --workspace frontend-vite",
+    "start:supabase": "npm run start --workspace backend-supabase",
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "test": "turbo run test"
+  },
+  "devDependencies": {
+    "turbo": "^1.10.16",
+    "typescript": "^5.3.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
