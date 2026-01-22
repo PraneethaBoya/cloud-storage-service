@@ -1,29 +1,34 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { supabase } from '../lib/supabase'
+import { signInWithEmailAndPassword } from 'firebase/auth'
+import { auth } from '../lib/firebase'
+import { formatAuthError } from '../lib/authErrors'
+import { useAuth } from '../lib/AuthContext'
 
 export default function LoginPage() {
   const navigate = useNavigate()
+  const { user } = useAuth()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
+  useEffect(() => {
+    if (user) navigate('/dashboard', { replace: true })
+  }, [user, navigate])
+
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError(null)
     setLoading(true)
-
-    const { error } = await supabase.auth.signInWithPassword({ email, password })
-
-    setLoading(false)
-
-    if (error) {
-      setError(error.message)
-      return
+    try {
+      await signInWithEmailAndPassword(auth, email, password)
+      navigate('/dashboard')
+    } catch (err) {
+      setError(formatAuthError(err))
+    } finally {
+      setLoading(false)
     }
-
-    navigate('/dashboard')
   }
 
   return (

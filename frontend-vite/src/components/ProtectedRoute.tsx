@@ -1,31 +1,9 @@
-import { ReactNode, useEffect, useState } from 'react'
+import { ReactNode } from 'react'
 import { Navigate } from 'react-router-dom'
-import { supabase } from '../lib/supabase'
+import { useAuth } from '../lib/AuthContext'
 
 export default function ProtectedRoute({ children }: { children: ReactNode }) {
-  const [loading, setLoading] = useState(true)
-  const [authed, setAuthed] = useState(false)
-
-  useEffect(() => {
-    let mounted = true
-
-    supabase.auth.getSession().then(({ data }) => {
-      if (!mounted) return
-      setAuthed(!!data.session)
-      setLoading(false)
-    })
-
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (!mounted) return
-      setAuthed(!!session)
-      setLoading(false)
-    })
-
-    return () => {
-      mounted = false
-      sub.subscription.unsubscribe()
-    }
-  }, [])
+  const { user, loading } = useAuth()
 
   if (loading) {
     return (
@@ -35,7 +13,7 @@ export default function ProtectedRoute({ children }: { children: ReactNode }) {
     )
   }
 
-  if (!authed) return <Navigate to="/login" replace />
+  if (!user) return <Navigate to="/login" replace />
 
   return <>{children}</>
 }

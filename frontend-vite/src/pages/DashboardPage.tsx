@@ -1,13 +1,21 @@
 import { useEffect, useMemo, useState } from 'react'
-import { supabase } from '../lib/supabase'
-import { api } from '../lib/api'
+import { signOut } from 'firebase/auth'
+import type { DocumentData, QueryDocumentSnapshot } from 'firebase/firestore'
+import { addDoc, collection, deleteDoc, doc, getDocs, orderBy, query, serverTimestamp, where } from 'firebase/firestore'
+import type { UploadTaskSnapshot } from 'firebase/storage'
+import { deleteObject, getDownloadURL, ref, uploadBytesResumable } from 'firebase/storage'
+import { auth, db, storage } from '../lib/firebase'
+import { useAuth } from '../lib/AuthContext'
 
 type FileRow = {
   id: string
-  name: string
-  mime_type: string | null
-  size: number
-  created_at: string
+  userId: string
+  fileName: string
+  fileSize: number
+  fileType: string
+  downloadURL: string
+  storagePath: string
+  createdAt?: any
 }
 
 function formatSize(bytes: number) {
@@ -19,6 +27,7 @@ function formatSize(bytes: number) {
 }
 
 export default function DashboardPage() {
+  const { user } = useAuth()
   const [email, setEmail] = useState<string | null>(null)
   const [files, setFiles] = useState<FileRow[]>([])
   const [loading, setLoading] = useState(false)
@@ -26,14 +35,25 @@ export default function DashboardPage() {
   const [uploading, setUploading] = useState(false)
   const [uploadProgress, setUploadProgress] = useState(0)
 
-  const totalSize = useMemo(() => files.reduce((acc, f) => acc + (f.size || 0), 0), [files])
+  const totalSize = useMemo(() => files.reduce((acc, f) => acc + (f.fileSize || 0), 0), [files])
 
   const loadFiles = async () => {
     setError(null)
     setLoading(true)
     try {
-      const res = await api.get('/files')
-      setFiles(res.data.files || [])
+      if (!user) {
+        setFiles([])
+        return
+      }
+
+      const q = query(
+        collection(db, 'files'),
+        where('userId', '==', user.uid),
+        orderBy('createdAt', 'desc')
+      )
+      const snap = await getDocs(q)
+      const rows: FileRow[] = snap.docs.map((d: QueryDocumentSnapshot<DocumentData>) => ({ id: d.id, ...(d.data() as any) }))
+      setFiles(rows)
     } catch (e: any) {
       setError(e?.message || 'Failed to load files')
     } finally {
@@ -42,56 +62,77 @@ export default function DashboardPage() {
   }
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => setEmail(data.user?.email || null))
+    setEmail(user?.email || null)
     loadFiles()
-  }, [])
+  }, [user])
 
   const onLogout = async () => {
-    await supabase.auth.signOut()
+    await signOut(auth)
     window.location.href = '/login'
   }
 
   const onUpload = async (file: File) => {
+    if (!user) return
     setUploading(true)
     setUploadProgress(0)
     setError(null)
 
-    const form = new FormData()
-    form.append('file', file)
+    const storagePath = `users/${user.uid}/${Date.now()}_${file.name}`
+    const objectRef = ref(storage, storagePath)
 
     try {
-      await api.post('/files/upload', form, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-        onUploadProgress: (evt) => {
-          if (!evt.total) return
-          setUploadProgress(Math.round((evt.loaded / evt.total) * 100))
-        },
+      const task = uploadBytesResumable(objectRef, file, {
+        contentType: file.type || undefined,
       })
+
+      await new Promise<void>((resolve, reject) => {
+        task.on(
+          'state_changed',
+          (snap: UploadTaskSnapshot) => {
+            const pct = snap.totalBytes ? Math.round((snap.bytesTransferred / snap.totalBytes) * 100) : 0
+            setUploadProgress(pct)
+          },
+          (err: unknown) => reject(err),
+          () => resolve()
+        )
+      })
+
+      const downloadURL = await getDownloadURL(objectRef)
+
+      await addDoc(collection(db, 'files'), {
+        userId: user.uid,
+        fileName: file.name,
+        fileSize: file.size,
+        fileType: file.type || 'application/octet-stream',
+        downloadURL,
+        storagePath,
+        createdAt: serverTimestamp(),
+      })
+
       await loadFiles()
     } catch (e: any) {
-      setError(e?.response?.data?.error?.message || e?.message || 'Upload failed')
+      setError(e?.message || 'Upload failed')
     } finally {
       setUploading(false)
       setUploadProgress(0)
     }
   }
 
-  const onDownload = async (id: string) => {
+  const onDownload = async (downloadURL: string) => {
     try {
-      const res = await api.get(`/files/${id}/download`)
-      const url = res.data.url
-      window.open(url, '_blank')
+      window.open(downloadURL, '_blank')
     } catch (e: any) {
-      setError(e?.response?.data?.error?.message || e?.message || 'Download failed')
+      setError(e?.message || 'Download failed')
     }
   }
 
-  const onDelete = async (id: string) => {
+  const onDelete = async (file: FileRow) => {
     try {
-      await api.delete(`/files/${id}`)
+      await deleteObject(ref(storage, file.storagePath))
+      await deleteDoc(doc(db, 'files', file.id))
       await loadFiles()
     } catch (e: any) {
-      setError(e?.response?.data?.error?.message || e?.message || 'Delete failed')
+      setError(e?.message || 'Delete failed')
     }
   }
 
@@ -159,16 +200,18 @@ export default function DashboardPage() {
               <tbody>
                 {files.map((f) => (
                   <tr key={f.id} className="border-t border-gray-100 hover:bg-gray-50">
-                    <td className="px-4 py-3 text-sm text-gray-900">{f.name}</td>
-                    <td className="px-4 py-3 text-sm text-gray-600">{f.mime_type || '—'}</td>
-                    <td className="px-4 py-3 text-sm text-gray-600">{formatSize(f.size)}</td>
-                    <td className="px-4 py-3 text-sm text-gray-600">{new Date(f.created_at).toLocaleString()}</td>
+                    <td className="px-4 py-3 text-sm text-gray-900">{f.fileName}</td>
+                    <td className="px-4 py-3 text-sm text-gray-600">{f.fileType || '—'}</td>
+                    <td className="px-4 py-3 text-sm text-gray-600">{formatSize(f.fileSize)}</td>
+                    <td className="px-4 py-3 text-sm text-gray-600">
+                      {f.createdAt?.toDate ? f.createdAt.toDate().toLocaleString() : '—'}
+                    </td>
                     <td className="px-4 py-3">
                       <div className="flex justify-end gap-2">
-                        <button className="text-sm px-2 py-1 rounded hover:bg-gray-100" onClick={() => onDownload(f.id)}>
+                        <button className="text-sm px-2 py-1 rounded hover:bg-gray-100" onClick={() => onDownload(f.downloadURL)}>
                           Download
                         </button>
-                        <button className="text-sm px-2 py-1 rounded text-red-600 hover:bg-red-50" onClick={() => onDelete(f.id)}>
+                        <button className="text-sm px-2 py-1 rounded text-red-600 hover:bg-red-50" onClick={() => onDelete(f)}>
                           Delete
                         </button>
                       </div>
