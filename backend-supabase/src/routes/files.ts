@@ -1,4 +1,4 @@
-import { Router } from 'express'
+import { Router, type NextFunction, type Response } from 'express'
 import multer from 'multer'
 import { z } from 'zod'
 import { authenticateSupabase, type AuthenticatedRequest } from '../middleware/auth.js'
@@ -18,7 +18,7 @@ const listQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(200).default(100),
 })
 
-router.get('/', authenticateSupabase, async (req: AuthenticatedRequest, res, next) => {
+router.get('/', authenticateSupabase, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   try {
     const { limit } = listQuerySchema.parse(req.query)
 
@@ -37,7 +37,7 @@ router.get('/', authenticateSupabase, async (req: AuthenticatedRequest, res, nex
   }
 })
 
-router.post('/upload', authenticateSupabase, upload.single('file'), async (req: AuthenticatedRequest, res, next) => {
+router.post('/upload', authenticateSupabase, upload.single('file'), async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   try {
     if (!req.file) {
       return res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: 'Missing file' } })
@@ -83,7 +83,7 @@ router.post('/upload', authenticateSupabase, upload.single('file'), async (req: 
   }
 })
 
-router.get('/:id/download', authenticateSupabase, async (req: AuthenticatedRequest, res, next) => {
+router.get('/:id/download', authenticateSupabase, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   try {
     const id = req.params.id
 
@@ -112,7 +112,7 @@ router.get('/:id/download', authenticateSupabase, async (req: AuthenticatedReque
   }
 })
 
-router.delete('/:id', authenticateSupabase, async (req: AuthenticatedRequest, res, next) => {
+router.delete('/:id', authenticateSupabase, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   try {
     const id = req.params.id
 

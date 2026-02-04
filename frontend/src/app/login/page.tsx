@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useCurrentUser } from '@/hooks/useCurrentUser'
@@ -17,11 +17,11 @@ export default function LoginPage() {
   // Keep the query active but disabled when on login page
   const { data: user } = useCurrentUser()
 
-  // Redirect if already logged in
-  if (user) {
-    router.push('/dashboard')
-    return null
-  }
+  useEffect(() => {
+    if (user) {
+      router.push('/dashboard')
+    }
+  }, [router, user])
 
   const loginMutation = useMutation({
     mutationFn: () => login(email, password),
@@ -115,7 +115,7 @@ export default function LoginPage() {
               href="/signup"
               className="text-indigo-600 hover:text-indigo-500 text-sm"
             >
-              Don't have an account? Sign up
+              Don&apos;t have an account? Sign up
             </Link>
           </div>
         </form>

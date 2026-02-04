@@ -1,8 +1,4 @@
-import express from 'express'
-import cors from 'cors'
-import helmet from 'helmet'
 import { config } from './config.js'
-import filesRouter from './routes/files.js'
 
 import { createApp } from './app.js'
 

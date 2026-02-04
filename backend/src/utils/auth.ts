@@ -1,5 +1,6 @@
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
+import crypto from 'crypto';
 import { config } from '../config/index.js';
 import { JWTPayload } from '../types/index.js';
 
@@ -40,6 +41,5 @@ export function verifyRefreshToken(token: string): JWTPayload {
 }
 
 export function generateSecureToken(length: number = 32): string {
-  const crypto = require('crypto');
   return crypto.randomBytes(length).toString('hex');
 }
